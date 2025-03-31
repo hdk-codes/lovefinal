@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Clock, Eye } from "lucide-react";
-import { Snap } from "../../shared/sanity-types";
+import { Snap } from "@/types/snap"; // Update import path
 
 interface SnapMessageProps {
   snap: Snap;
@@ -14,10 +13,10 @@ const SnapMessage = ({ snap, onView }: SnapMessageProps) => {
   const [timeLeft, setTimeLeft] = useState(snap.duration || 5);
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Convert Sanity image reference to URL
-  const imageUrl = snap?.media?.asset?._ref
-    ? `https://cdn.sanity.io/images/${process.env.SANITY_PROJECT_ID || 'project-id'}/${process.env.SANITY_DATASET || 'production'}/${snap.media.asset._ref.replace('image-', '').replace('-jpg', '.jpg')}`
-    : null;
+  // Use either direct imageUrl or construct from media asset
+  const imageUrl = snap.imageUrl || (snap.media?.asset?._ref
+    ? `https://cdn.sanity.io/images/${process.env.VITE_SANITY_PROJECT_ID || 'project-id'}/${process.env.VITE_SANITY_DATASET || 'production'}/${snap.media.asset._ref.replace('image-', '').replace('-jpg', '.jpg')}`
+    : null);
   
   // Handle viewing the snap
   const handleView = () => {
@@ -36,7 +35,7 @@ const SnapMessage = ({ snap, onView }: SnapMessageProps) => {
     if (!isViewing) return;
     
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
+      setTimeLeft((prev: number) => {
         if (prev <= 1) {
           clearInterval(timer);
           return 0;

@@ -2,7 +2,11 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Heart, Mail, Camera } from "lucide-react";
 
-const Footer = () => {
+interface FooterProps {
+  isDarkMode: boolean;
+}
+
+const Footer = ({ isDarkMode }: FooterProps) => {
   const [, setLocation] = useLocation();
   
   return (

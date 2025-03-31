@@ -1,3 +1,5 @@
+import { SanityDocument } from "@/types/sanity";
+
 // Type definitions for Sanity schemas
 
 export interface Album {
@@ -94,20 +96,24 @@ export interface LandingPage {
   message: string;
 }
 
-export interface Snap {
-  _id: string;
-  sender: {
-    _ref: string;
-    _type: 'reference';
-  };
-  media?: {
-    asset: {
-      _ref: string;
-      _type: 'reference';
-    };
-  };
+export interface Snap extends SanityDocument {
+  title: string;
+  message: string;
+  imageUrl?: string;
   duration?: number;
-  expiresAt: string;
-  viewed: boolean;
-  _createdAt: string;
+  createdAt: string;
+  expiresAt?: string;
+  isPrivate?: boolean;
+  recipientId?: string;
+  viewCount?: number;
+  reactions?: {
+    emoji: string;
+    count: number;
+  }[];
+}
+
+export interface SnapResponse {
+  success: boolean;
+  data?: Snap;
+  error?: string;
 }

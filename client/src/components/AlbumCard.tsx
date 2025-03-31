@@ -1,36 +1,52 @@
-
 import { motion } from "framer-motion";
 import { Eye, CalendarDays, ImageIcon, Tag, MapPin } from "lucide-react";
 import { Link } from "wouter";
-import { Album } from "../../../shared/sanity-types";
 
-interface AlbumCardProps {
-  album: Album;
+export interface AlbumCardProps {
+  id: string;
+  title: string;
+  description: string;
+  coverImage: string;
+  itemsCount: number;
+  date?: string;
+  isPrivate?: boolean;
+  location?: string;
+  categories?: string[];
+  tags?: string[];
+  dateRange?: {
+    from: string;
+    to: string;
+  };
 }
 
-const AlbumCard = ({ album }: AlbumCardProps) => {
-  // Handle case where album is undefined
-  if (!album) {
-    return <div className="rounded-lg p-4 bg-gray-800 text-gray-400">Album data not available</div>;
-  }
-  
+const AlbumCard = ({
+  id,
+  title,
+  description,
+  coverImage,
+  itemsCount,
+  date,
+  isPrivate,
+  location,
+  categories,
+  tags,
+  dateRange
+}: AlbumCardProps) => {
   // Default placeholder image if no cover image is provided
   const defaultCover = "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80";
   
-  // Extract data from album
-  const { _id, title, description, itemsCount = 0, coverImage } = album;
+  // Get first category if available, with null coalescing
+  const primaryCategory = categories && categories.length > 0 ? categories[0] : null;
   
-  // Format date if available
-  const dateRange = album.dateRange ? {
-    from: new Date(album.dateRange.from).toLocaleDateString(),
-    to: new Date(album.dateRange.to).toLocaleDateString()
-  } : null;
-  
-  // Get first category if available
-  const primaryCategory = album.categories?.length > 0 ? album.categories[0] : null;
-  
-  // Format tags for display
-  const tagsToShow = album.tags?.slice(0, 3) || [];
+  // Format tags for display with null coalescing
+  const tagsToShow = tags?.slice(0, 3) ?? [];
+
+  // Fix type for tag parameter
+  const renderTags = (tag: string, index: number) => (
+    <span key={index} className="text-xs bg-gray-800 text-pink-300 px-2 py-0.5 rounded-full">
+      {tag}
+    </span>
+  );
 
   return (
     <motion.div 
@@ -42,7 +58,6 @@ const AlbumCard = ({ album }: AlbumCardProps) => {
       transition={{ duration: 0.5 }}
     >
       <div className="relative h-64 overflow-hidden rounded-t-lg">
-        {/* Cover Image with fallback */}
         {coverImage ? (
           <img 
             src={coverImage} 
@@ -87,11 +102,7 @@ const AlbumCard = ({ album }: AlbumCardProps) => {
         {/* Tags section */}
         {tagsToShow.length > 0 && (
           <div className="mt-2 flex gap-1 flex-wrap">
-            {tagsToShow.map((tag, index) => (
-              <span key={index} className="text-xs bg-gray-800 text-pink-300 px-2 py-0.5 rounded-full">
-                {tag}
-              </span>
-            ))}
+            {tagsToShow.map((tag: string, index: number) => renderTags(tag, index))}
           </div>
         )}
         
@@ -103,15 +114,15 @@ const AlbumCard = ({ album }: AlbumCardProps) => {
             </div>
           )}
           
-          {album.location && (
+          {location && (
             <div className="flex items-center gap-1 text-xs text-pink-300/70">
               <MapPin size={12} />
-              <span>Location</span>
+              <span>{location}</span>
             </div>
           )}
           
           <Link
-            href={`/album/${_id}`}
+            href={`/album/${id}`}
             className="text-pink-400 hover:text-pink-300 transition-colors duration-300 p-2 rounded-full hover:bg-pink-500/10"
           >
             <Eye size={18} />
@@ -127,7 +138,7 @@ const AlbumCard = ({ album }: AlbumCardProps) => {
       </div>
       
       {/* Private indicator */}
-      {album.isPrivate && (
+      {isPrivate && (
         <div className="absolute top-3 left-3 bg-gray-900/80 text-xs text-white px-2 py-0.5 rounded-full flex items-center gap-1">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>

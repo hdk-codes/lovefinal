@@ -8,10 +8,10 @@
   * {
     @apply border-border;
   }
-
+  
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    background-color: #111827; /* dark background */
+    background-color: #111827;
     color: #f5f5f5;
     overflow-x: hidden;
     background-image: 
@@ -20,15 +20,15 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', serif;
+    @apply font-playfair;
   }
 
   p {
-    font-family: 'Lora', serif;
+    @apply font-lora;
   }
 
   .handwritten {
-    font-family: 'Dancing Script', cursive;
+    @apply font-dancing;
   }
 }
 
@@ -147,4 +147,17 @@
   .mobile-tilt:hover {
     transform: perspective(500px) rotateY(5deg);
   }
+}
+
+.animate-fade-up {
+  animation: fadeUp 1.2s ease-out forwards;
+}
+
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
 }

@@ -12,22 +12,20 @@ interface Letter {
   createdAt?: string;
 }
 
-const LoveLettersSection = () => {
+interface LoveLettersSectionProps {
+  isDarkMode: boolean;
+}
+
+const LoveLettersSection = ({ isDarkMode }: LoveLettersSectionProps) => {
   const { data, isLoading, isError } = useQuery<Letter[]>({
-    queryKey: ["/api/love-letters"],
-    select: (data) => {
-      // Ensure data is always an array
-      if (!data) return [];
-      if (!Array.isArray(data)) return [data as any];
-      return data;
-    }
+    queryKey: ['/api/love-letters']
   });
 
   // Safe accessing the letters data
   const letters = data || [];
 
   return (
-    <section id="love-letters" className="py-20 relative overflow-hidden">
+    <section className={`py-12 ${isDarkMode ? 'text-[#E6D9F2]' : 'text-[#4A4A4A]'}`}>
       {/* Background decoration */}
       <div className="absolute inset-0 -z-10 opacity-5">
         <div className="absolute top-0 right-0 w-1/3 h-1/3">

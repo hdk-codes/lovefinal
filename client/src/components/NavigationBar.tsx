@@ -1,7 +1,14 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link } from "wouter"; // Assuming you're using Wouter for routing
+import { cn } from "@/lib/utils";
+import { ReactNode } from 'react';
 
-const NavigationBar = () => {
+interface NavigationBarProps {
+  extraControls?: ReactNode;
+  isDarkMode?: boolean;
+}
+
+const NavigationBar = ({ extraControls, isDarkMode }: NavigationBarProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleMobileMenu = () => {
@@ -14,7 +21,6 @@ const NavigationBar = () => {
 
   const scrollToSection = (sectionId: string) => {
     closeMobileMenu();
-    
     const section = document.getElementById(sectionId);
     if (section) {
       window.scrollTo({
@@ -25,77 +31,139 @@ const NavigationBar = () => {
   };
 
   return (
-    <nav className="fixed top-0 w-full z-50 backdrop-blur-sm bg-[#FFF5F5]/75 shadow-sm">
+    <nav
+      className={cn(
+        "fixed top-0 w-full z-50 backdrop-blur-sm shadow-sm",
+        isDarkMode ? "bg-[#2A1B3D]/75" : "bg-[#FFF5F5]/75"
+      )}
+    >
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <Link href="/" className="text-2xl font-dancing text-[#FF6B6B] font-bold">
+        <Link
+          href="/"
+          className="text-2xl font-dancing text-[#FF6B6B] font-bold hover:text-[#FF8787] transition-colors duration-300"
+        >
           Our Love Story
         </Link>
-        
-        <div className="hidden md:flex space-x-8">
-          <button 
-            onClick={() => scrollToSection('home')}
-            className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+
+        {/* Desktop Menu */}
+        <div className="hidden md:flex space-x-8 items-center">
+          <button
+            onClick={() => scrollToSection("home")}
+            className={cn(
+              "transition-colors duration-300",
+              isDarkMode
+                ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                : "text-[#4A4A4A] hover:text-[#FF1493]"
+            )}
           >
             Home
           </button>
-          <button 
-            onClick={() => scrollToSection('love-letters')}
-            className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+          <button
+            onClick={() => scrollToSection("love-letters")}
+            className={cn(
+              "transition-colors duration-300",
+              isDarkMode
+                ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                : "text-[#4A4A4A] hover:text-[#FF1493]"
+            )}
           >
             Love Letters
           </button>
-          <button 
-            onClick={() => scrollToSection('memories')}
-            className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+          <button
+            onClick={() => scrollToSection("memories")}
+            className={cn(
+              "transition-colors duration-300",
+              isDarkMode
+                ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                : "text-[#4A4A4A] hover:text-[#FF1493]"
+            )}
           >
             Memories
           </button>
-          <button 
-            onClick={() => scrollToSection('messages')}
-            className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+          <button
+            onClick={() => scrollToSection("timeline")}
+            className={cn(
+              "transition-colors duration-300",
+              isDarkMode
+                ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                : "text-[#4A4A4A] hover:text-[#FF1493]"
+            )}
           >
-            Messages
+            Timeline
           </button>
+          {extraControls}
         </div>
-        
-        <button 
+
+        {/* Mobile Menu Button */}
+        <button
           onClick={toggleMobileMenu}
-          className="md:hidden text-[#4A4A4A]"
+          className={cn(
+            "md:hidden",
+            isDarkMode ? "text-[#E6D9F2]" : "text-[#4A4A4A]"
+          )}
         >
           <span className="material-icons">
-            {mobileMenuOpen ? 'close' : 'menu'}
+            {mobileMenuOpen ? "close" : "menu"}
           </span>
         </button>
       </div>
-      
-      {/* Mobile menu */}
+
+      {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white shadow-md absolute w-full">
+        <div
+          className={cn(
+            "md:hidden shadow-md absolute w-full",
+            isDarkMode ? "bg-[#2A1B3D]" : "bg-white"
+          )}
+        >
           <div className="container mx-auto px-4 py-3 flex flex-col space-y-4">
-            <button 
-              onClick={() => scrollToSection('home')}
-              className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+            <button
+              onClick={() => scrollToSection("home")}
+              className={cn(
+                "transition-colors duration-300",
+                isDarkMode
+                  ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                  : "text-[#4A4A4A] hover:text-[#FF1493]"
+              )}
             >
               Home
             </button>
-            <button 
-              onClick={() => scrollToSection('love-letters')}
-              className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+            <button
+              onClick={() => scrollToSection("love-letters")}
+              className={cn(
+                "transition-colors duration-300",
+                isDarkMode
+                  ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                  : "text-[#4A4A4A] hover:text-[#FF1493]"
+              )}
             >
               Love Letters
             </button>
-            <button 
-              onClick={() => scrollToSection('memories')}
-              className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+            <button
+              onClick={() => scrollToSection("memories")}
+              className={cn(
+                "transition-colors duration-300",
+                isDarkMode
+                  ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                  : "text-[#4A4A4A] hover:text-[#FF1493]"
+              )}
             >
               Memories
             </button>
-            <button 
-              onClick={() => scrollToSection('messages')}
-              className="text-[#4A4A4A] hover:text-[#FF1493] transition-colors duration-300"
+            <button
+              onClick={() => scrollToSection("timeline")}
+              className={cn(
+                "transition-colors duration-300",
+                isDarkMode
+                  ? "text-[#E6D9F2] hover:text-[#FF1493]"
+                  : "text-[#4A4A4A] hover:text-[#FF1493]"
+              )}
             >
-              Messages
+              Timeline
             </button>
+            {extraControls && (
+              <div className="flex flex-col space-y-4">{extraControls}</div>
+            )}
           </div>
         </div>
       )}

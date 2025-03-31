@@ -26,12 +26,9 @@ const checkAudioSupport = async (): Promise<boolean> => {
     }
 
     // Initialize audio context first for iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isIOS) {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioContext();
-      await audioContext.resume();
-    }
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    const audioContext = new AudioContext();
+    await audioContext.resume();
 
     // Request permission explicitly
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -40,7 +37,8 @@ const checkAudioSupport = async (): Promise<boolean> => {
   } catch (err) {
     console.error('Audio support check failed:', err);
     if ((err as Error).name === 'NotAllowedError' || (err as Error).message?.includes('permission')) {
-      setPermissionDenied(true);
+      // Use function component state setter instead of global
+      return false;
     }
     return false;
   }
@@ -124,6 +122,7 @@ export function RecordAudioMessageForm({ onSuccess, onCancel }: RecordAudioMessa
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isMountedRef = useRef<boolean>(true);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const { toast } = useToast();
 
@@ -245,67 +244,72 @@ export function RecordAudioMessageForm({ onSuccess, onCancel }: RecordAudioMessa
       setError(null);
       setPermissionDenied(false);
 
-      // Special handling for iOS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContext();
-        await audioContext.resume();
+      // Clean up any existing recordings first
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        audioChunksRef.current = [];
       }
 
-      // Request permission with more specific constraints for mobile
+      // Ensure stream is released
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      // Request permission with optimal constraints
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: isMobile ? 22050 : 44100,
           channelCount: 1,
         }
       });
 
-      // For mobile, use simpler configuration
-      const options = isMobile ? {
-        audioBitsPerSecond: 32000,
-        mimeType: 'audio/webm'
-      } : {
-        audioBitsPerSecond: 128000,
-        mimeType: getSupportedMimeType()
-      };
+      streamRef.current = stream;
 
-      try {
-        mediaRecorderRef.current = new MediaRecorder(stream, options);
-      } catch (err) {
-        console.warn('Falling back to basic MediaRecorder');
-        mediaRecorderRef.current = new MediaRecorder(stream);
+      // Try to get supported MIME type
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
       }
 
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: isMobile ? 32000 : 128000
+      });
+
+      mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
-      // Increase chunk size for mobile to reduce processing
-      const chunkSize = isMobile ? 1000 : 500;
-
-      mediaRecorderRef.current.addEventListener('dataavailable', (e: BlobEvent) => {
+      recorder.addEventListener('dataavailable', (e: BlobEvent) => {
         if (e.data.size > 0 && isMountedRef.current) {
           audioChunksRef.current.push(e.data);
         }
       });
 
-      mediaRecorderRef.current.addEventListener('stop', async () => {
+      recorder.addEventListener('stop', () => {
         if (!isMountedRef.current) return;
-        // Always use webm for consistency across devices
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         setAudioBlob(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
       });
 
-      mediaRecorderRef.current.addEventListener('error', (event: Event) => {
+      recorder.addEventListener('error', (event: Event) => {
         handleError('Recording failed', (event as MediaRecorderErrorEvent).error);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
       });
 
-      mediaRecorderRef.current.start(chunkSize);
+      recorder.start(isMobile ? 1000 : 500);
       setIsRecording(true);
 
+      // Start the timer
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => {
         if (isMountedRef.current) {
           setRecordingTime((prev) => {
@@ -318,18 +322,21 @@ export function RecordAudioMessageForm({ onSuccess, onCancel }: RecordAudioMessa
         }
       }, 1000);
 
-      console.log('Recording started with MIME type:', options.mimeType);
-
     } catch (err: unknown) {
       console.error('Recording error:', err);
       const error = err as Error;
+      
       if (error.name === 'NotAllowedError' || error.message?.includes('permission')) {
         setPermissionDenied(true);
         handleError("Microphone access needed. Please allow it in your settings.", err);
       } else {
-        handleError("Unable to start recording. Try reloading the page.", err);
+        handleError(`Recording failed: ${error.message}`, err);
       }
+      
       setIsRecording(false);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
     }
   };
 
@@ -376,14 +383,16 @@ export function RecordAudioMessageForm({ onSuccess, onCancel }: RecordAudioMessa
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!isMountedRef.current) return;
-    if (!title) return handleError("Give your love note a title", null);
+    
+    // Only check for title if we have audio recording and permissions
     if (!audioBlob) return handleError("Record a sweet message first", null);
+    if (permissionDenied) return handleError("Please allow microphone access first", null);
+    if (!title) return handleError("Give your love note a title", null);
     
     try {
       setIsSubmitting(true);
       const formData = new FormData();
       
-      // Convert to MP3 or AAC for mobile if needed
       const finalBlob = isMobile ? 
         await convertAudioToCompatibleFormat(audioBlob) : 
         audioBlob;
@@ -457,23 +466,57 @@ export function RecordAudioMessageForm({ onSuccess, onCancel }: RecordAudioMessa
       return;
     }
 
-    // For iOS, we need to handle the audio context first
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isIOS) {
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContext();
-        await audioContext.resume();
-      } catch (err) {
-        console.error('iOS audio context error:', err);
-      }
-    }
-
     try {
+      // Check microphone permission first
+      const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      if (permissionStatus.state === 'denied') {
+        setPermissionDenied(true);
+        handleError("Please allow microphone access in your browser settings", null);
+        return;
+      }
+
+      // For iOS, we need to handle the audio context first
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        try {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          const audioContext = new AudioContext();
+          await audioContext.resume();
+        } catch (err) {
+          console.error('iOS audio context error:', err);
+        }
+      }
+
       await startRecording();
     } catch (err) {
-      handleError("Failed to start recording", err);
+      if ((err as Error).name === 'NotAllowedError' || (err as Error).message?.includes('permission')) {
+        setPermissionDenied(true);
+        handleError("Microphone access needed. Please allow it in your settings.", err);
+      } else {
+        handleError("Failed to start recording", err);
+      }
     }
+  };
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  // Convert Float32Array to regular array before iteration
+  const processAudioData = (audioData: Float32Array) => {
+    const dataArray = Array.from(audioData);
+    return dataArray.map((value) => Math.abs(value));
   };
 
   return (

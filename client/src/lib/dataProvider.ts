@@ -1,4 +1,5 @@
-import { client, queries } from '../../../server/lib/sanity';
+import { client } from './sanity'; // Ensure this points to the correct Sanity client file
+import { queries } from './query-utils'; // Ensure this points to the correct query utilities file
 
 // Only cache read-only queries that don't need real-time updates
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -28,16 +29,40 @@ async function selectiveCachedFetch<T>(key: string, fetcher: () => Promise<T>, s
 }
 
 export const dataProvider = {
-  // Real-time queries (no caching)
-  getLetters: () => client.fetch(queries.getLetters),
-  getRecentContent: () => client.fetch(queries.getRecentContent),
-  getAudioMessages: () => client.fetch(queries.getAudioMessages),
+  letters: () => client.fetch<any>(queries.loveLetters),
+  recentContent: () => client.fetch<any>(queries.getRecentContent),
+  audioMessages: () => client.fetch<any>(queries.getAudioMessages),
   
   // Cached queries (static content)
-  getLandingPage: () => selectiveCachedFetch('landingPage', () => client.fetch(queries.getLandingPage), true),
-  getFeaturedItems: () => selectiveCachedFetch('featuredItems', () => client.fetch(queries.getFeaturedItems), true),
+  landingPage: () => selectiveCachedFetch('landingPage', () => client.fetch<any>(queries.getLandingPage), true),
+  featuredItems: () => selectiveCachedFetch('featuredItems', () => client.fetch<any>(queries.getFeaturedItems), true),
   
   // Real-time queries with params
-  getAlbums: (params = {}) => client.fetch(queries.getAlbums, params),
-  getGalleryItems: (params = {}) => client.fetch(queries.getGalleryItems, params),
+  albums: (params = {}) => client.fetch<any>(queries.albums, params),
+  galleryItems: (params = {}) => client.fetch<any>(queries.getGalleryItems, params),
+};
+
+export const fetchLoveLetters = async () => {
+  return client.fetch(queries.loveLetters); // Ensure `queries.loveLetters` exists
+};
+
+export const fetchAlbums = async () => {
+  return client.fetch(queries.albums, { identity: 'current-user' }); // Ensure `queries.albums` exists
+};
+
+export const fetchGalleryFeatured = async () => {
+  return client.fetch(queries.galleryFeatured); // Ensure `queries.galleryFeatured` exists
+};
+
+export const fetchData = async (endpoint: string) => {
+  switch (endpoint) {
+    case '/api/love-letters':
+      return fetchLoveLetters();
+    case '/api/albums':
+      return fetchAlbums();
+    case '/api/gallery/featured':
+      return fetchGalleryFeatured();
+    default:
+      throw new Error(`No data fetcher found for endpoint: ${endpoint}`);
+  }
 };

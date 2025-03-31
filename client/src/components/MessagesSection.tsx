@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/sanity";
 import groq from "groq";
@@ -11,27 +11,21 @@ import {
   FormControl,
   InputLabel,
   CircularProgress,
-  Switch,
-  useMediaQuery,
+  TextField,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
 } from "@mui/material";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTheme } from "@mui/system";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { AutoSizer, List } from "react-virtualized";
-import { BentoGrid, BentoGridItem } from "@/components/ui/bento-grid";
-import { HoverEffect } from "@/components/ui/card-hover-effect";
-import { GlowingEffect } from "@/components/ui/glowing-effect";
-import { ExpandableCard } from "@/components/ui/expandable-card"; // Custom component, defined beloww
-import { Mic, Heart, Play, Pause, Volume2, VolumeX, SkipBack, SkipForward } from "lucide-react";
+import { Mic, Heart, Play, Pause, Volume2, VolumeX, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { AudioPlayer } from "@/components/AudioPlayer"; // New component, defined below
 import { Slider } from "@/components/ui/slider";
 import { useInView } from "react-intersection-observer";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
-import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 
 const getMessagesQuery = groq`
   *[_type == "audioMessage"] | order(_createdAt desc) {
@@ -60,19 +54,23 @@ interface AudioMessageType {
   audioUrl?: string;
 }
 
-const generateRandomBars = (count: number) => 
+const generateRandomBars = (count: number) =>
   Array.from({ length: count }, () => Math.random() * 100);
 
-// Update AudioVisualizer component
-const AudioVisualizer = ({ isPlaying, progress, isDark }: { 
-  isPlaying: boolean; 
+// AudioVisualizer Component
+const AudioVisualizer = ({
+  isPlaying,
+  progress,
+  isDark,
+}: {
+  isPlaying: boolean;
   progress: number;
   isDark: boolean;
 }) => {
   const [bars] = useState(() => generateRandomBars(30));
-  
+
   return (
-    <div className="flex items-end h-full gap-[2px]">
+    <div className="flex items-end h-full gap-[2px] px-2">
       {bars.map((height, i) => {
         const isActive = (i / bars.length) * 100 <= progress;
         return (
@@ -80,19 +78,21 @@ const AudioVisualizer = ({ isPlaying, progress, isDark }: {
             key={i}
             className={cn(
               "w-1 rounded-full",
-              isActive 
-                ? "bg-gradient-to-t from-pink-500 to-purple-500" 
-                : isDark ? "bg-gray-700" : "bg-gray-200"
+              isActive
+                ? "bg-gradient-to-t from-[#FF6B6B] to-[#800000]"
+                : isDark
+                ? "bg-[#4A4A4A]"
+                : "bg-[#E6D9F2]"
             )}
             animate={{
-              height: isPlaying ? `${height}%` : "40%",
-              opacity: isPlaying ? 1 : 0.5
+              height: isPlaying ? `${Math.max(height, 10)}%` : "10%",
+              opacity: isPlaying ? 1 : 0.5,
             }}
             transition={{
-              duration: 0.5,
+              duration: 0.3,
               repeat: isPlaying ? Infinity : 0,
-              repeatType: "reverse",
-              delay: i * 0.02
+              repeatType: "mirror",
+              delay: i * 0.015,
             }}
             style={{ minHeight: 4 }}
           />
@@ -102,27 +102,39 @@ const AudioVisualizer = ({ isPlaying, progress, isDark }: {
   );
 };
 
-// Update AudioCard props type
+// AudioCard Component
 interface AudioCardProps {
   message: AudioMessageType;
   index: number;
   isDark: boolean;
   provided: any;
   inView: boolean;
+  onDelete: (id: string) => void;
 }
 
-// Update AudioCard component
-const AudioCard = ({ message, index, isDark, provided, inView }: AudioCardProps) => {
-  const { state, controls } = useAudioPlayer(message.audioUrl);
-  const { toast } = useToast();
+const AudioCard = ({
+  message,
+  index,
+  isDark,
+  provided,
+  inView,
+  onDelete,
+}: AudioCardProps) => {
+  const { state, controls } = useAudioPlayer(message.audioFile.asset.url);
+  const [reaction, setReaction] = useState<string | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const progressPercent = (state.currentTime / state.duration) * 100 || 0;
+  const progressPercent = (state.currentTime / (state.duration || 1)) * 100 || 0;
+
+  const handleReaction = (emoji: string) => {
+    setReaction(emoji);
+    toast.success(`Reacted with ${emoji}`);
+  };
 
   return (
     <motion.div
@@ -133,107 +145,152 @@ const AudioCard = ({ message, index, isDark, provided, inView }: AudioCardProps)
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       className={cn(
-        "relative mb-4 group",
-        "transform-gpu transition-all duration-300",
-        "touch-pan-y", // Improve touch handling
-        isDark ? "text-white" : "text-gray-900"
+        "relative group rounded-xl overflow-hidden",
+        isDark ? "bg-[#1A0F2A]/95" : "bg-[#FFF5F5]/95",
+        "border",
+        isDark ? "border-[#FF6B6B]/60" : "border-[#800000]/60",
+        "hover:shadow-xl hover:scale-[1.03] transition-all duration-300"
       )}
+      style={{ boxShadow: isDark ? "0 0 15px rgba(255, 107, 107, 0.2)" : "none" }}
     >
-      <div className={cn(
-        "relative overflow-hidden rounded-2xl",
-        "backdrop-blur-sm backdrop-filter",
-        "transform-gpu transition-all duration-300",
-        isDark 
-          ? "bg-gray-800/90 border border-gray-700/50" 
-          : "bg-white/90 border border-gray-200/50",
-        "group hover:shadow-xl hover:scale-[1.02]"
-      )}>
-        {/* Modern Gradient Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 via-purple-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-        
-        <div className="relative z-10 p-4">
-          {/* Title Section */}
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold truncate">{message.title}</h3>
-            {state.isBuffering && (
-              <div className="animate-pulse text-pink-500">
-                <span className="text-xs">Loading...</span>
-              </div>
+      <div className="p-4 relative z-10">
+        {/* Title and Mood */}
+        <div className="flex items-center justify-between mb-4">
+          <h3
+            className={cn(
+              "text-lg font-semibold font-dancing truncate max-w-[70%]",
+              isDark ? "text-[#FF6B6B]" : "text-[#800000]"
             )}
+          >
+            {message.title}
+          </h3>
+          <div className="flex items-center gap-2">
+            {message.mood && (
+              <span
+                className={cn(
+                  "text-xs px-2 py-1 rounded-full",
+                  isDark
+                    ? "bg-[#FF6B6B]/20 text-[#FF6B6B]"
+                    : "bg-[#800000]/20 text-[#800000]"
+                )}
+              >
+                {message.mood}
+              </span>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onDelete(message._id)}
+              className="text-[#FF6B6B] opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Trash2 size={18} />
+            </Button>
           </div>
+        </div>
 
-          {/* Modern Waveform Visualizer */}
-          <div className="relative h-16 mb-4">
-            <div className="absolute inset-0">
-              <AudioVisualizer 
-                isPlaying={state.isPlaying} 
-                progress={progressPercent}
-                isDark={isDark}
-              />
-            </div>
-            {/* Progress Overlay */}
-            <div 
-              className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20"
-              style={{ clipPath: `inset(0 ${100 - progressPercent}% 0 0)` }}
-            />
-          </div>
+        {/* Visualizer */}
+        <div className="relative h-16 mb-4">
+          <AudioVisualizer
+            isPlaying={state.isPlaying}
+            progress={progressPercent}
+            isDark={isDark}
+          />
+        </div>
 
-          {/* Modern Controls */}
-          <div className="flex items-center gap-4">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => state.isPlaying ? controls.pause() : controls.play()}
+        {/* Controls */}
+        <div className="flex items-center gap-4">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => (state.isPlaying ? controls.pause() : controls.play())}
+            className={cn(
+              "p-2 rounded-full bg-[#FF6B6B] text-white",
+              "hover:bg-[#FF8787] transition-all"
+            )}
+          >
+            {state.isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          </motion.button>
+
+          {/* Progress Bar */}
+          <div className="flex-1">
+            <div
               className={cn(
-                "p-3 rounded-full",
-                "bg-gradient-to-r from-pink-500 to-purple-500",
-                "text-white shadow-lg",
-                "transform transition-all",
-                "hover:shadow-pink-500/25 hover:from-pink-600 hover:to-purple-600"
+                "relative h-1 rounded-full overflow-hidden",
+                isDark ? "bg-[#4A4A4A]" : "bg-[#E6D9F2]"
               )}
             >
-              {state.isPlaying ? <Pause size={20} /> : <Play size={20} />}
-            </motion.button>
-
-            {/* Time and Progress */}
-            <div className="flex-1">
-              <div className="relative h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <motion.div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-pink-500 to-purple-500"
-                  style={{ width: `${progressPercent}%` }}
-                  transition={{ type: "spring", damping: 15 }}
-                />
-                <input
-                  type="range"
-                  min={0}
-                  max={state.duration}
-                  value={state.currentTime}
-                  onChange={(e) => controls.seek(parseFloat(e.target.value))}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-              </div>
-              <div className="flex justify-between mt-1 text-xs opacity-75">
-                <span>{formatTime(state.currentTime)}</span>
-                <span>{formatTime(state.duration)}</span>
-              </div>
-            </div>
-
-            {/* Volume Control */}
-            <div className="hidden sm:flex items-center gap-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => controls.setVolume(state.volume === 0 ? 0.7 : 0)}
-                className="text-pink-500"
-              >
-                {state.volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-              </Button>
-              <Slider
-                value={[state.volume * 100]}
-                max={100}
-                className="w-20"
-                onValueChange={(value) => controls.setVolume(value[0] / 100)}
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#FF6B6B] to-[#800000]"
+                style={{ width: `${progressPercent}%` }}
+                transition={{ type: "spring", stiffness: 100, damping: 20 }}
+              />
+              <input
+                type="range"
+                min={0}
+                max={state.duration || 100}
+                value={state.currentTime}
+                onChange={(e) => controls.seek(parseFloat(e.target.value))}
+                className="absolute inset-0 opacity-0 cursor-pointer"
               />
             </div>
+            <div
+              className={cn(
+                "flex justify-between mt-1 text-xs opacity-75",
+                isDark ? "text-[#E6D9F2]" : "text-[#4A4A4A]"
+              )}
+            >
+              <span>{formatTime(state.currentTime)}</span>
+              <span>{formatTime(state.duration)}</span>
+            </div>
+          </div>
+
+          {/* Volume */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => controls.setVolume(state.volume === 0 ? 0.7 : 0)}
+              className="text-[#FF6B6B]"
+            >
+              {state.volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </Button>
+            <Slider
+              value={[state.volume * 100]}
+              max={100}
+              className="w-20"
+              onValueChange={(value) => controls.setVolume(value[0] / 100)}
+            />
+          </div>
+        </div>
+
+        {/* Caption and Reactions */}
+        <div className="mt-4 flex justify-between items-center">
+          {message.caption && (
+            <p
+              className={cn(
+                "text-sm italic flex-1",
+                isDark ? "text-[#E6D9F2]" : "text-[#4A4A4A]"
+              )}
+            >
+              "{message.caption}"
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleReaction("❤️")}
+              className={cn("text-[#FF6B6B]", reaction === "❤️" && "opacity-50")}
+            >
+              <Heart size={16} />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleReaction("😊")}
+              className={cn("text-[#FF6B6B]", reaction === "😊" && "opacity-50")}
+            >
+              😊
+            </Button>
           </div>
         </div>
       </div>
@@ -241,25 +298,17 @@ const AudioCard = ({ message, index, isDark, provided, inView }: AudioCardProps)
   );
 };
 
-AudioCard.displayName = 'AudioCard';
-
-const MessagesSection = () => {
+// MessagesSection Component
+const MessagesSection = ({ isDarkMode = true }: { isDarkMode?: boolean }) => {
   const queryClient = useQueryClient();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const [layout, setLayout] = useState<"bento" | "hover" | "expandable">("bento");
   const [moodFilter, setMoodFilter] = useState<string | null>(null);
-  const [isDark, setIsDark] = useState(false);
-  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isDark, setIsDark] = useState(isDarkMode);
   const [messagesOrder, setMessagesOrder] = useState<AudioMessageType[]>([]);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [ref, inView] = useInView({ threshold: 0.1 });
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [ref, inView] = useInView({
-    threshold: 0.1,
-    triggerOnce: true,
-  });
-
-  const { data: messages = [], isLoading, error } = useQuery<AudioMessageType[]>({
+  const { data: messages = [], isLoading } = useQuery<AudioMessageType[]>({
     queryKey: ["audioMessages", moodFilter],
     queryFn: async () => {
       try {
@@ -269,7 +318,7 @@ const MessagesSection = () => {
             : getMessagesQuery
         );
       } catch (err) {
-        toast.error("Failed to fetch story chapters!");
+        toast.error("Failed to fetch messages!");
         throw err;
       }
     },
@@ -281,112 +330,105 @@ const MessagesSection = () => {
     mutationFn: async (id: string) => await client.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["audioMessages"] });
-      toast.success("Chapter removed!", { icon: "💔" });
+      toast.success("Message deleted!", { icon: "💔" });
+      setDeleteId(null);
     },
     onError: () => toast.error("Deletion failed!"),
   });
 
-  const filteredMessages = useMemo(
-    () =>
-      messagesOrder.length
-        ? messagesOrder.map((msg) => ({
-            ...msg,
-            audioUrl: msg.audioFile?.asset?.url || undefined,
-          }))
-        : messages.map((msg) => ({
-            ...msg,
-            audioUrl: msg.audioFile?.asset?.url || undefined,
-          })),
-    [messages, messagesOrder]
-  );
+  const filteredMessages = useMemo(() => {
+    const orderedMessages = messagesOrder.length ? messagesOrder : messages;
+    return orderedMessages
+      .filter(
+        (msg) =>
+          msg.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (msg.caption && msg.caption.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+      .map((msg) => ({
+        ...msg,
+        audioUrl: msg.audioFile?.asset?.url || undefined,
+      }));
+  }, [messages, messagesOrder, searchQuery]);
 
   useEffect(() => {
     setMessagesOrder(messages);
-  }, [messages]);
+    setIsDark(isDarkMode);
+  }, [messages, isDarkMode]);
 
-  const onDragEnd = (result: any) => {
+  const onDragEnd = useCallback((result: any) => {
     if (!result.destination) return;
     const items = Array.from(filteredMessages);
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
     setMessagesOrder(items);
-  };
+  }, [filteredMessages]);
 
-  // Simplified renderMessageCard function
-  const renderMessageCard = (message: AudioMessageType, index: number) => {
-    return (
-      <Draggable key={message._id} draggableId={message._id} index={index}>
-        {(provided) => (
-          <AudioCard
-            message={message}
-            index={index}
-            isDark={isDark}
-            provided={provided}
-            inView={inView}
-          />
-        )}
-      </Draggable>
-    );
-  };
+  const handleDelete = (id: string) => setDeleteId(id);
+  const confirmDelete = () => deleteMessageMutation.mutate(deleteId!);
 
   return (
-    <ScrollArea 
-      className={cn(
-        "h-[calc(100vh-4rem)] overflow-y-auto overscroll-none",
-        "scrollbar-thin scrollbar-thumb-pink-500/20 scrollbar-track-transparent",
-        isDark && "dark scrollbar-thumb-pink-400/20"
-      )}
-      role="region"
-      aria-label="Audio messages section"
+    <section
+      id="messages"
+      className={cn("py-12 px-4", isDark ? "bg-[#2A1B3D]" : "bg-[#FFF5F5]")}
+      ref={ref}
     >
-      <div 
-        ref={(el) => {
-          containerRef.current = el;
-          ref(el); // Attach intersection observer ref
-        }}
+      <ScrollArea
         className={cn(
-          "container mx-auto px-4 py-8 transition-colors duration-300",
-          "min-h-screen",
-          isDark 
-            ? "bg-gray-900 text-white bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-800 via-gray-900 to-black" 
-            : "bg-white text-gray-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-50 via-white to-gray-100"
+          "h-[calc(100vh-4rem)]",
+          isDark && "scrollbar-thumb-[#FF6B6B]/20 scrollbar-track-[#1A0F2A]"
         )}
       >
-        {/* Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <motion.div className="flex flex-col sm:flex-row justify-between items-center mb-8">
-            <Typography 
-              variant="h4" 
-              className={cn(
-                "transition-colors duration-300",
-                isDark ? "text-pink-400" : "text-pink-600"
-              )}
+        <div className="container mx-auto">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 flex flex-col sm:flex-row justify-between items-center gap-4"
+          >
+            <Typography
+              variant="h4"
+              className={cn("font-dancing", isDark ? "text-[#FF6B6B]" : "text-[#800000]")}
             >
-              Audio Story Chapters
+              Our Audio Messages
             </Typography>
-            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mt: { xs: 2, sm: 0 } }}>
+            <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+              <TextField
+                label="Search Messages"
+                variant="outlined"
+                size="small"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    color: isDark ? "#E6D9F2" : "#4A4A4A",
+                    "& fieldset": {
+                      borderColor: isDark ? "#FF6B6B" : "#800000",
+                    },
+                    "&:hover fieldset": {
+                      borderColor: isDark ? "#FF8787" : "#A52A2A",
+                    },
+                  },
+                  "& .MuiInputLabel-root": { color: isDark ? "#E6D9F2" : "#4A4A4A" },
+                }}
+              />
               <FormControl size="small">
-                <InputLabel>Layout</InputLabel>
-                <Select
-                  value={layout}
-                  label="Layout"
-                  onChange={(e) => setLayout(e.target.value as "bento" | "hover" | "expandable")}
-                >
-                  <MenuItem value="bento">Bento Grid</MenuItem>
-                  <MenuItem value="hover">Hover Effect</MenuItem>
-                  <MenuItem value="expandable">Expandable Cards</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl size="small">
-                <InputLabel>Mood</InputLabel>
+                <InputLabel sx={{ color: isDark ? "#E6D9F2" : "#4A4A4A" }}>
+                  Mood
+                </InputLabel>
                 <Select
                   value={moodFilter || ""}
                   label="Mood"
                   onChange={(e) => setMoodFilter(e.target.value || null)}
+                  sx={{
+                    color: isDark ? "#E6D9F2" : "#4A4A4A",
+                    borderColor: isDark ? "#FF6B6B" : "#800000",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: isDark ? "#FF6B6B" : "#800000",
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: isDark ? "#FF8787" : "#A52A2A",
+                    },
+                  }}
                 >
                   <MenuItem value="">All Moods</MenuItem>
                   <MenuItem value="romantic">Romantic</MenuItem>
@@ -396,61 +438,100 @@ const MessagesSection = () => {
                   <MenuItem value="missingYou">Missing You</MenuItem>
                 </Select>
               </FormControl>
-              <Switch 
-                checked={isDark} 
-                onChange={() => setIsDark(!isDark)}
-                className={cn(
-                  "transition-colors duration-300",
-                  isDark ? "bg-pink-400" : "bg-pink-600"
-                )}
-              />
             </Box>
           </motion.div>
-        </motion.div>
 
-        {/* Messages Grid */}
-        <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId="messages">
-            {(provided) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className={cn(
-                  "grid gap-4 transition-all duration-300",
-                  "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-                  "auto-rows-max"
+          {/* Messages */}
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <CircularProgress sx={{ color: "#FF6B6B" }} />
+            </div>
+          ) : filteredMessages.length === 0 ? (
+            <Typography
+              className={cn("text-center", isDark ? "text-[#E6D9F2]" : "text-[#4A4A4A]")}
+            >
+              No messages found.
+            </Typography>
+          ) : (
+            <DragDropContext onDragEnd={onDragEnd}>
+              <Droppable droppableId="messages">
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                  >
+                    <AnimatePresence>
+                      {filteredMessages.map((message, index) => (
+                        <Draggable
+                          key={message._id}
+                          draggableId={message._id}
+                          index={index}
+                        >
+                          {(provided) => (
+                            <AudioCard
+                              message={message}
+                              index={index}
+                              isDark={isDark}
+                              provided={provided}
+                              inView={inView}
+                              onDelete={handleDelete}
+                            />
+                          )}
+                        </Draggable>
+                      ))}
+                    </AnimatePresence>
+                    {provided.placeholder}
+                  </div>
                 )}
-              >
-                {filteredMessages.map((message, index) => 
-                  renderMessageCard(message, index)
-                )}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+              </Droppable>
+            </DragDropContext>
+          )}
 
-        {/* Add Message Button */}
-        <motion.div
-          className="fixed bottom-6 right-6"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <Button
-            size="lg"
-            className={cn(
-              "rounded-full transition-all duration-300",
-              isDark 
-                ? "bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white"
-                : "bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 text-white"
-            )}
+          {/* Record Button */}
+          <motion.div
+            className="fixed bottom-6 right-6"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <Mic className="mr-2" />
-            Record New Story
-          </Button>
-        </motion.div>
-      </div>
-    </ScrollArea>
+            <Button
+              size="lg"
+              className={cn(
+                "rounded-full",
+                isDark
+                  ? "bg-gradient-to-r from-[#FF6B6B] to-[#800000] text-white hover:from-[#FF8787] hover:to-[#A52A2A]"
+                  : "bg-gradient-to-r from-[#800000] to-[#FF6B6B] text-white hover:from-[#A52A2A] hover:to-[#FF8787]"
+              )}
+            >
+              <Mic className="mr-2" />
+              Record a Message
+            </Button>
+          </motion.div>
+
+          {/* Delete Confirmation Dialog */}
+          <Dialog
+            open={!!deleteId}
+            onClose={() => setDeleteId(null)}
+            PaperProps={{
+              style: { background: isDark ? "#1A0F2A" : "#FFF5F5", color: isDark ? "#E6D9F2" : "#4A4A4A" },
+            }}
+          >
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogContent>
+              Are you sure you want to delete this message? This action cannot be undone.
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteId(null)} variant="outline">
+                Cancel
+              </Button>
+              <Button onClick={confirmDelete} className="bg-[#FF6B6B] text-white">
+                Delete
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </div>
+      </ScrollArea>
+    </section>
   );
 };
 

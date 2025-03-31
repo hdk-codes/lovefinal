@@ -2,7 +2,10 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
+  content: [
+    "./client/src/**/*.{js,ts,jsx,tsx}",
+    "./client/index.html"
+  ],
   theme: {
     extend: {
       borderRadius: {
@@ -61,6 +64,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+      },
+      fontFamily: {
+        'lora': ['Lora', 'serif'],
+        'dancing': ['Dancing Script', 'cursive'],
+        'playfair': ['Playfair Display', 'serif'],
+        'sans': ['system-ui', 'sans-serif'],
       },
       keyframes: {
         "accordion-down": {

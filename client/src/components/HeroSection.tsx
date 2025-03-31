@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { ChevronDown, Heart } from "lucide-react";
 
 interface HeroSectionProps {
-  title: string;
-  message: string;
+  title?: string;
+  message?: string;
+  isDarkMode: boolean;
 }
 
-const HeroSection = ({ title, message }: HeroSectionProps) => {
+const HeroSection = ({ title, message, isDarkMode }: HeroSectionProps) => {
   const [scrollY, setScrollY] = useState(0);
 
   const handleScroll = () => {
@@ -109,9 +110,11 @@ const HeroSection = ({ title, message }: HeroSectionProps) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, delay: 0.7 }}
           >
-            {message.split('\n').map((paragraph, index) => (
+            {message ? message.split('\n').map((paragraph, index) => (
               <p key={index} className="mb-4">{paragraph}</p>
-            ))}
+            )) : (
+              <p className="mb-4">Our digital love story...</p>
+            )}
           </motion.div>
           
           <motion.div 

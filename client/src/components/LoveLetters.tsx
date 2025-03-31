@@ -16,7 +16,7 @@ export function LoveLetters() {
     error 
   } = useQuery<LoveLetter[]>({
     queryKey: ['letters'],
-    queryFn: () => dataProvider.getLetters(),
+    queryFn: () => dataProvider.letters(),
     gcTime: 30000, // 30 seconds garbage collection time
     staleTime: 1000, // 1 second before refetch
     refetchInterval: (data) => data ? 5000 : 1000, // Poll every 5s if we have data, 1s if not

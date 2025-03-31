@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "wouter";
 import { useState } from "react";
 
-export const HoverEffect = ({
+export const CardHoverEffect = ({
   items,
   className,
 }: {
@@ -48,17 +48,17 @@ export const HoverEffect = ({
               />
             )}
           </AnimatePresence>
-          <Card>
+          <CardContainer>
             <CardTitle>{item.title}</CardTitle>
             <CardDescription>{item.description}</CardDescription>
-          </Card>
+          </CardContainer>
         </Link>
       ))}
     </div>
   );
 };
 
-export const Card = ({
+export const CardContainer = ({
   className,
   children,
 }: {

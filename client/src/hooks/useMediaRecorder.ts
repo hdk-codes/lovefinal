@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { MediaRecorderErrorEvent } from '../types/media';
 
 interface MediaRecorderConfig {
   mimeType?: string;
@@ -70,7 +71,7 @@ export const useMediaRecorder = (config: MediaRecorderConfig = {}) => {
         setState(prev => ({ ...prev, isRecording: false }));
       });
 
-      recorder.addEventListener('error', (event) => {
+      recorder.addEventListener('error', (event: Event) => {
         setState(prev => ({
           ...prev,
           error: (event as MediaRecorderErrorEvent).error

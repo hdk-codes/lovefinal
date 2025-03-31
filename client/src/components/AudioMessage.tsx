@@ -112,11 +112,7 @@ const AudioMessage = ({
 
         audio.addEventListener('waiting', () => setIsBuffering(true));
         audio.addEventListener('playing', () => setIsBuffering(false));
-        audio.addEventListener('error', (e) => {
-          const errorMsg = e.currentTarget?.error?.message || "Audio loading failed";
-          setError(`Audio error: ${errorMsg}`);
-          setIsLoading(false);
-        }, { once: true });
+        audio.addEventListener('error', handleAudioError, { once: true });
 
         audio.addEventListener('timeupdate', () => {
           setCurrentTime(audio.currentTime);
@@ -176,6 +172,13 @@ const AudioMessage = ({
     bgMusicRef.current?.pause();
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
   }, []);
+
+  const handleAudioError = (e: Event) => {
+    const target = e.target as HTMLAudioElement;
+    if (target.error) {
+      console.error('Audio error:', target.error.message);
+    }
+  };
 
   const togglePlay = useCallback(async () => {
     if (!audioRef.current || isLoading || error) return;
@@ -517,7 +520,37 @@ const AudioMessage = ({
         </div>
       )}
 
-      <style jsx>{`
+      {/* Styles */}
+      <style>
+        {`
+          .audio-message-container {
+            max-width: 640px;
+            margin: 0 auto;
+            color: white;
+            background-blend-mode: overlay;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+          }
+          /* ...rest of your styles... */
+        `}
+      </style>
+
+      {/* Remove the jsx property from style tag */}
+      <style>
+        {`
+          /* ...existing styles... */
+        `}
+      </style>
+
+      <style>
+        {`
+        .audio-message-container {
+          /* your styles here */
+        }
+        `}
+      </style>
+
+      <style>
+        {`
         .audio-message-container {
           max-width: 640px;
           margin: 0 auto;
